@@ -194,7 +194,6 @@ pipeline {
                 '''
             }
         }
-    }
 
 
         stage('Publish Image to Docker Hub') {
@@ -275,9 +274,11 @@ pipeline {
             }
         }
 
+    }
+
     post {
         success {
-            echo 'Jenkins CI checkout, automated tests and production image build completed successfully.'
+            echo 'Jenkins CI/CD pipeline including automated tests, security scanning, image build and Docker Hub publication completed successfully.'
         }
 
         failure {
