@@ -4,6 +4,11 @@ pipeline {
     options {
         skipDefaultCheckout(true)
         timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '10', artifactNumToKeepStr: '5'))
+    }
+
+    triggers {
+        pollSCM('H/5 * * * *')
     }
 
     stages {
@@ -279,6 +284,21 @@ pipeline {
     post {
         success {
             echo 'Jenkins CI/CD pipeline including automated tests, security scanning, image build and Docker Hub publication completed successfully.'
+
+            sh '''
+                mkdir -p ci-artifacts
+
+                {
+                    echo "Jenkins Build: ${BUILD_NUMBER}"
+                    echo "Git Commit: $(git rev-parse HEAD)"
+                    echo "Local Image: isec6000-express:build-${BUILD_NUMBER}"
+                    echo "Registry Image: athakkar531/isec6000-express:build-${BUILD_NUMBER}"
+                    echo "Security Policy: Pipeline fails on High/Critical dependency vulnerabilities"
+                } > "ci-artifacts/build-${BUILD_NUMBER}-metadata.txt"
+            '''
+
+            archiveArtifacts                 artifacts: 'ci-artifacts/*.txt,Jenkinsfile,Dockerfile,package.json,package-lock.json',
+                fingerprint: true
         }
 
         failure {
