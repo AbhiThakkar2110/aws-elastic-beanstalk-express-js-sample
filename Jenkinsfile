@@ -100,6 +100,63 @@ pipeline {
             }
         }
 
+
+        stage('Dependency Vulnerability Scan') {
+            steps {
+                sh '''
+                    set -eu
+
+                    echo "=== DEPENDENCY VULNERABILITY SECURITY GATE ==="
+
+                    SECURITY_CONTAINER="isec6000-security-${BUILD_NUMBER}"
+
+                    cleanup() {
+                        docker rm -f "$SECURITY_CONTAINER" >/dev/null 2>&1 || true
+                    }
+
+                    trap cleanup EXIT
+
+                    echo
+                    echo "Creating isolated Node 16 security scan container..."
+
+                    docker create \
+                        --name "$SECURITY_CONTAINER" \
+                        -w /workspace \
+                        node:16-alpine \
+                        sh -c '
+                            echo "=== SECURITY SCAN ENVIRONMENT ==="
+
+                            echo "Node version:"
+                            node --version
+
+                            echo
+                            echo "npm version:"
+                            npm --version
+
+                            echo
+                            echo "=== INSTALLING LOCKED DEPENDENCIES ==="
+                            npm ci
+
+                            echo
+                            echo "=== HIGH/CRITICAL DEPENDENCY SECURITY GATE ==="
+                            npm audit --audit-level=high
+                        '
+
+                    echo
+                    echo "Copying checked-out application into security scan container..."
+                    docker cp . "$SECURITY_CONTAINER":/workspace
+
+                    echo
+                    echo "Starting dependency vulnerability assessment..."
+                    docker start -a "$SECURITY_CONTAINER"
+
+                    echo
+                    echo "=== SECURITY GATE PASSED ==="
+                    echo "No High or Critical dependency vulnerabilities detected."
+                '''
+            }
+        }
+
         stage('Build Application Image') {
             steps {
                 sh '''
