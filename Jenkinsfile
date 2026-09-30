@@ -99,11 +99,49 @@ pipeline {
                 '''
             }
         }
+
+        stage('Build Application Image') {
+            steps {
+                sh '''
+                    set -eu
+
+                    echo "=== APPLICATION IMAGE BUILD STAGE ==="
+
+                    IMAGE_NAME="isec6000-express"
+                    IMAGE_TAG="build-${BUILD_NUMBER}"
+                    FULL_IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
+
+                    echo
+                    echo "Building production application image:"
+                    echo "$FULL_IMAGE"
+
+                    docker build \
+                        --label "isec6000.commit=$(git rev-parse HEAD)" \
+                        --label "isec6000.build=${BUILD_NUMBER}" \
+                        -t "$FULL_IMAGE" \
+                        .
+
+                    echo
+                    echo "=== BUILT IMAGE ==="
+                    docker image ls "$FULL_IMAGE"
+
+                    echo
+                    echo "=== IMAGE CONFIGURATION ==="
+                    docker image inspect "$FULL_IMAGE" \
+                        --format 'Image={{.RepoTags}} | User={{.Config.User}} | WorkingDir={{.Config.WorkingDir}} | ExposedPorts={{json .Config.ExposedPorts}} | Cmd={{json .Config.Cmd}}'
+
+                    echo
+                    echo "=== IMAGE LABELS ==="
+                    docker image inspect "$FULL_IMAGE" \
+                        --format 'Commit={{index .Config.Labels "isec6000.commit"}} | JenkinsBuild={{index .Config.Labels "isec6000.build"}}'
+                '''
+            }
+        }
     }
 
     post {
         success {
-            echo 'Jenkins CI checkout, environment verification and automated tests completed successfully.'
+            echo 'Jenkins CI checkout, automated tests and production image build completed successfully.'
         }
 
         failure {
