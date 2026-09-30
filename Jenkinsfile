@@ -196,6 +196,85 @@ pipeline {
         }
     }
 
+
+        stage('Publish Image to Docker Hub') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKERHUB_USERNAME',
+                        passwordVariable: 'DOCKERHUB_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        set -eu
+
+                        echo "=== DOCKER HUB REGISTRY PUBLICATION ==="
+
+                        LOCAL_IMAGE="isec6000-express:build-${BUILD_NUMBER}"
+                        REGISTRY_REPOSITORY="${DOCKERHUB_USERNAME}/isec6000-express"
+                        VERSIONED_IMAGE="${REGISTRY_REPOSITORY}:build-${BUILD_NUMBER}"
+                        LATEST_IMAGE="${REGISTRY_REPOSITORY}:latest"
+
+                        DOCKER_CONFIG_DIR="$(mktemp -d)"
+                        export DOCKER_CONFIG="$DOCKER_CONFIG_DIR"
+
+                        cleanup() {
+                            docker logout >/dev/null 2>&1 || true
+                            rm -rf "$DOCKER_CONFIG_DIR"
+                        }
+
+                        trap cleanup EXIT
+
+                        echo
+                        echo "Local Jenkins artifact:"
+                        echo "$LOCAL_IMAGE"
+
+                        echo
+                        echo "Versioned registry artifact:"
+                        echo "$VERSIONED_IMAGE"
+
+                        echo
+                        echo "Latest registry artifact:"
+                        echo "$LATEST_IMAGE"
+
+                        echo
+                        echo "=== AUTHENTICATING TO DOCKER HUB ==="
+
+                        printf '%s' "$DOCKERHUB_TOKEN" | \
+                            docker login \
+                                --username "$DOCKERHUB_USERNAME" \
+                                --password-stdin
+
+                        echo
+                        echo "=== TAGGING REGISTRY IMAGES ==="
+
+                        docker tag "$LOCAL_IMAGE" "$VERSIONED_IMAGE"
+                        docker tag "$LOCAL_IMAGE" "$LATEST_IMAGE"
+
+                        docker image inspect "$VERSIONED_IMAGE" \
+                            --format 'VersionedImage={{.RepoTags}} | Commit={{index .Config.Labels "isec6000.commit"}} | JenkinsBuild={{index .Config.Labels "isec6000.build"}}'
+
+                        echo
+                        echo "=== PUSHING VERSIONED IMAGE ==="
+
+                        docker push "$VERSIONED_IMAGE"
+
+                        echo
+                        echo "=== PUSHING LATEST IMAGE ==="
+
+                        docker push "$LATEST_IMAGE"
+
+                        echo
+                        echo "=== DOCKER HUB PUBLICATION COMPLETE ==="
+
+                        echo "Published: $VERSIONED_IMAGE"
+                        echo "Published: $LATEST_IMAGE"
+                    '''
+                }
+            }
+        }
+
     post {
         success {
             echo 'Jenkins CI checkout, automated tests and production image build completed successfully.'
